@@ -1,2 +1,2 @@
 # royongbase
-community powered knowledge base
+community-powered knowledge base
