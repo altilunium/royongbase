@@ -14,8 +14,6 @@ function save_db($filename, $data) {
 }
 function log_deletion($data) {
     $log_file = 'deletion_log.jsonl';
-
-    // JSON Lines format (1 JSON object per line)
     file_put_contents(
         $log_file,
         json_encode($data, JSON_UNESCAPED_UNICODE) . PHP_EOL,
@@ -116,6 +114,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         header("Location: index.php?page=thread&id=$t_id");
         exit;
     }
+    
+    // Blog Actions
+    if ($_POST['action'] === 'new_blog') {
+        $db_blogs = 'blogs.json';
+        $blogs = load_db($db_blogs);
+        $blog_id = uniqid('b_');
+        $blogs[$blog_id] = [
+            'id' => $blog_id,
+            'author' => $user_id,
+            'title' => $_POST['title'],
+            'posts' => [[
+                'author' => $user_id,
+                'content' => $_POST['content'],
+                'time' => time()
+            ]]
+        ];
+        save_db($db_blogs, $blogs);
+        header("Location: index.php?page=profile");
+        exit;
+    }
+    if ($_POST['action'] === 'reply_blog') {
+        $db_blogs = 'blogs.json';
+        $blogs = load_db($db_blogs);
+        $b_id = $_POST['blog_id'];
+        if (isset($blogs[$b_id])) {
+            $blogs[$b_id]['posts'][] = [
+                'author' => $user_id,
+                'content' => $_POST['content'],
+                'time' => time()
+            ];
+            save_db($db_blogs, $blogs);
+        }
+        header("Location: index.php?page=blogpost&id=$b_id");
+        exit;
+    }
+
     // 4. Data Actions
     if ($_POST['action'] === 'new_item') {
         $db_items = 'data_items.json';
@@ -167,48 +201,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         exit;
     }
     if ($_POST['action'] === 'delete_statement') {
-$db_statements = 'data_statements.json';
-    $statements = load_db($db_statements);
+        $db_statements = 'data_statements.json';
+        $statements = load_db($db_statements);
+        $item_id = $_POST['item_id'];
+        $stmt_idx = (int)$_POST['statement_index'];
 
-    $item_id = $_POST['item_id'];
-    $stmt_idx = (int)$_POST['statement_index'];
+        if (isset($statements[$item_id][$stmt_idx])) {
+            $deleted_stmt = $statements[$item_id][$stmt_idx];
+            $items = load_db('data_items.json');
+            $props = load_db('data_props.json');
 
-    if (isset($statements[$item_id][$stmt_idx])) {
+            log_deletion([
+                'time' => date('c'),
+                'unix_time' => time(),
+                'user_id' => $user_id,
+                'user_handle' => get_handle($user_id),
+                'triple' => [
+                    'item_id' => $item_id,
+                    'item_label' => $items[$item_id]['label'] ?? $item_id,
+                    'property_id' => $deleted_stmt['property'],
+                    'property_label' => $props[$deleted_stmt['property']]['label'] ?? $deleted_stmt['property'],
+                    'value_id' => $deleted_stmt['value_id'],
+                    'value_label' => $deleted_stmt['value_label']
+                ]
+            ]);
 
-        // Get statement BEFORE deletion
-        $deleted_stmt = $statements[$item_id][$stmt_idx];
-
-        // Load labels for readability
-        $items = load_db('data_items.json');
-        $props = load_db('data_props.json');
-
-        // Create log entry
-        log_deletion([
-            'time' => date('c'), // ISO timestamp
-            'unix_time' => time(),
-            'user_id' => $user_id,
-            'user_handle' => get_handle($user_id),
-
-            'triple' => [
-                'item_id' => $item_id,
-                'item_label' => $items[$item_id]['label'] ?? $item_id,
-
-                'property_id' => $deleted_stmt['property'],
-                'property_label' => $props[$deleted_stmt['property']]['label']
-                    ?? $deleted_stmt['property'],
-
-                'value_id' => $deleted_stmt['value_id'],
-                'value_label' => $deleted_stmt['value_label']
-            ]
-        ]);
-
-        // Delete statement
-        array_splice($statements[$item_id], $stmt_idx, 1);
-        save_db($db_statements, $statements);
-    }
-
-    header("Location: index.php?page=item&id=$item_id");
-    exit;
+            array_splice($statements[$item_id], $stmt_idx, 1);
+            save_db($db_statements, $statements);
+        }
+        header("Location: index.php?page=item&id=$item_id");
+        exit;
     }
     if ($_POST['action'] === 'edit_item') {
         $db_items = 'data_items.json';
@@ -346,16 +368,12 @@ function get_enc_uuid($id) {
 
 function get_value_link($value_id, $value_label) {
     if (strpos($value_id, 'Q') === 0) {
-        // Wikidata item
         return '<a href="https://www.wikidata.org/wiki/' . htmlspecialchars($value_id) . '" target="_blank">' . htmlspecialchars($value_label) . '</a>';
     } elseif (strpos($value_id, 'L') === 0) {
-        // Local item
         return '<a href="?page=item&id=' . urlencode($value_id) . '">' . htmlspecialchars($value_label) . '</a>';
     } elseif (filter_var($value_id, FILTER_VALIDATE_URL)) {
-        // value_id is a valid URL
         return '<a href="' . htmlspecialchars($value_id) . '" target="_blank">' . htmlspecialchars($value_label) . '</a>';
     } elseif (filter_var($value_label, FILTER_VALIDATE_URL)) {
-        // value_label is a valid URL
         return '<a href="' . htmlspecialchars($value_label) . '" target="_blank">' . htmlspecialchars($value_label) . '</a>';
     } else {
         return htmlspecialchars($value_label);
@@ -369,8 +387,9 @@ $page = $_GET['page'] ?? 'forum';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RoyongBase v26.6.11</title>
+    <title>BisikBekasi.rf.gd</title>
     <link rel="icon" href="https://pbs.twimg.com/profile_images/1716831335724326912/8ujZJHcJ_400x400.jpg" type="image/x-icon" />
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -378,6 +397,14 @@ $page = $_GET['page'] ?? 'forum';
             background: #f5f5f5; 
             color: #333;
             line-height: 1.5;
+        }
+
+        img {
+                display: block;
+    margin-left: auto;
+    margin-right: auto;
+max-width: 100%;
+    height: auto;
         }
         
         .container { 
@@ -576,7 +603,6 @@ $page = $_GET['page'] ?? 'forum';
             background: #f9f9f9;
         }
         
-        /* Forum Styles - Compact */
         .forum-thread {
             background: white;
             border: 1px solid #e0e0e0;
@@ -645,7 +671,13 @@ $page = $_GET['page'] ?? 'forum';
         }
         
         .post-content p {
-            margin: 0;
+            margin: 0 0 10px 0;
+        }
+        .post-content pre {
+            background: #f4f4f4; padding: 10px; border-radius: 4px; overflow-x: auto;
+        }
+        .post-content code {
+            font-family: monospace; background: #eee; padding: 2px 4px; border-radius: 3px;
         }
         
         .list-item {
@@ -690,10 +722,6 @@ $page = $_GET['page'] ?? 'forum';
         .list-item-controls button {
             padding: 4px 6px;
             font-size: 12px;
-        }
-        
-        .list-item-controls button:hover {
-            opacity: 0.8;
         }
         
         .data-table {
@@ -872,6 +900,7 @@ $page = $_GET['page'] ?? 'forum';
             </div>
             <nav>
                 <a href="?page=forum">Forum</a>
+                <a href="?page=blogs">Blogs</a>
                 <a href="?page=data">KnowledgeBase</a>
                 <a href="?page=profile">Profile</a>
             </nav>
@@ -879,7 +908,7 @@ $page = $_GET['page'] ?? 'forum';
 
         <main>
         <?php if ($page === 'profile'): ?>
-            <h2>Profile & Lists</h2>
+            <h2>Profile</h2>
             <div class="box">
                 <h3>Handle</h3>
                 <form method="POST">
@@ -889,6 +918,38 @@ $page = $_GET['page'] ?? 'forum';
                         <button type="submit">Update</button>
                     </div>
                 </form>
+            </div>
+
+            <div class="box">
+                <h3>My Blogs</h3>
+                <div style="margin-bottom: 12px;">
+                    <button onclick="document.getElementById('newBlogForm').style.display = document.getElementById('newBlogForm').style.display === 'none' ? 'block' : 'none'">+ Create New Blog Post</button>
+                </div>
+                <div id="newBlogForm" style="display: none; background: #f9f9f9; padding: 10px; margin-bottom: 10px; border-radius: 4px; border-left: 3px solid #0066cc;">
+                    <form method="POST">
+                        <input type="hidden" name="action" value="new_blog">
+                        <input type="text" name="title" placeholder="Blog Title" required style="margin-bottom: 8px;">
+                        <textarea name="content" placeholder="Write your blog post (Markdown supported)..." required style="font-size: 13px; margin-bottom: 8px; height: 100px;"></textarea>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="submit" style="font-size: 12px; padding: 6px 10px;">Post</button>
+                            <button type="button" onclick="document.getElementById('newBlogForm').style.display = 'none'" style="background: #6c757d; font-size: 12px; padding: 6px 10px;">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+                
+                <?php 
+                $blogs = load_db('blogs.json');
+                $my_blogs = array_filter($blogs, function($b) use ($user_id) { return $b['author'] === $user_id; });
+                if (empty($my_blogs)): ?>
+                    <p style="font-size: 13px; color: #999;">You have not posted any blogs yet.</p>
+                <?php else:
+                    foreach (array_reverse($my_blogs) as $blog): ?>
+                        <div class="data-item">
+                            <a href="?page=blogpost&id=<?php echo htmlspecialchars($blog['id']); ?>" class="data-item-link"><?php echo htmlspecialchars($blog['title']); ?></a>
+                            <div class="data-item-desc"><?php echo count($blog['posts'])-1; ?> comments • <?php echo date('M j, H:i', $blog['posts'][0]['time']); ?></div>
+                        </div>
+                    <?php endforeach;
+                endif; ?>
             </div>
 
             <div class="box">
@@ -1019,8 +1080,29 @@ $page = $_GET['page'] ?? 'forum';
             </div>
 
         <?php elseif ($page === 'forum'): ?>
-            <div style="margin-bottom: 16px;">
+            <?php
+            $forum = load_db('forum.json');
+            $sort = $_GET['sort'] ?? 'bump';
+            
+            uasort($forum, function($a, $b) use ($sort) {
+                if ($sort === 'latest') return $b['posts'][0]['time'] <=> $a['posts'][0]['time'];
+                if ($sort === 'replies') return count($b['posts']) <=> count($a['posts']);
+                return end($b['posts'])['time'] <=> end($a['posts'])['time'];
+            });
+            
+            $f_page = max(1, (int)($_GET['f_page'] ?? 1));
+            $per_page = 50;
+            $total_threads = count($forum);
+            $forum_slice = array_slice($forum, ($f_page - 1) * $per_page, $per_page, true);
+            ?>
+            <div style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
                 <button id="newThreadBtn" onclick="document.getElementById('newThreadForm').style.display = document.getElementById('newThreadForm').style.display === 'none' ? 'block' : 'none'">+ Create New Thread</button>
+                <div style="display: flex; gap: 8px;">
+                    <span style="font-size: 13px; padding: 8px 0; color: #666;">Sort:</span>
+                    <a href="?page=forum&sort=bump" style="padding: 6px 10px; font-size: 13px; background: <?php echo $sort==='bump'?'#0066cc':'#eee'; ?>; color: <?php echo $sort==='bump'?'white':'#333'; ?>; text-decoration: none; border-radius: 4px;">Bump</a>
+                    <a href="?page=forum&sort=latest" style="padding: 6px 10px; font-size: 13px; background: <?php echo $sort==='latest'?'#0066cc':'#eee'; ?>; color: <?php echo $sort==='latest'?'white':'#333'; ?>; text-decoration: none; border-radius: 4px;">Latest</a>
+                    <a href="?page=forum&sort=replies" style="padding: 6px 10px; font-size: 13px; background: <?php echo $sort==='replies'?'#0066cc':'#eee'; ?>; color: <?php echo $sort==='replies'?'white':'#333'; ?>; text-decoration: none; border-radius: 4px;">Replies</a>
+                </div>
             </div>
 
             <div id="newThreadForm" class="box" style="margin-bottom: 16px; display: none;">
@@ -1028,7 +1110,7 @@ $page = $_GET['page'] ?? 'forum';
                 <form method="POST">
                     <input type="hidden" name="action" value="new_thread">
                     <input type="text" name="title" placeholder="Thread Title" required>
-                    <textarea name="content" placeholder="First post..." required></textarea>
+                    <textarea name="content" placeholder="First post (Markdown supported)..." required></textarea>
                     <div style="display: flex; gap: 8px;">
                         <button type="submit">Post</button>
                         <button type="button" onclick="document.getElementById('newThreadForm').style.display = 'none'" style="background: #6c757d;">Cancel</button>
@@ -1037,12 +1119,10 @@ $page = $_GET['page'] ?? 'forum';
             </div>
 
             <h3 style="margin-bottom: 10px; margin-top: 0;">Threads</h3>
-            <?php 
-            $forum = load_db('forum.json');
-            if (empty($forum)): ?>
+            <?php if (empty($forum_slice)): ?>
                 <p style="text-align: center; color: #999; font-size: 14px; padding: 20px;">No threads yet. Be the first to create one.</p>
             <?php else:
-                foreach (array_reverse($forum) as $thread): ?>
+                foreach ($forum_slice as $thread): ?>
                     <div class="forum-thread">
                         <div class="forum-thread-header">
                             <a href="?page=thread&id=<?php echo htmlspecialchars($thread['id']); ?>" class="forum-thread-title"><?php echo htmlspecialchars($thread['title']); ?></a>
@@ -1050,6 +1130,11 @@ $page = $_GET['page'] ?? 'forum';
                         </div>
                     </div>
                 <?php endforeach;
+                if ($total_threads > $f_page * $per_page): ?>
+                    <div style="margin-top: 12px; text-align: center;">
+                        <a href="?page=forum&sort=<?php echo htmlspecialchars($sort); ?>&f_page=<?php echo $f_page + 1; ?>" style="padding: 8px 14px; background: #e0e0e0; color: #333; text-decoration: none; border-radius: 4px; font-size: 14px; display: inline-block;">Load More Threads</a>
+                    </div>
+                <?php endif;
             endif; ?>
 
         <?php elseif ($page === 'thread'): ?>
@@ -1070,7 +1155,7 @@ $page = $_GET['page'] ?? 'forum';
                             <span style="color: #999; font-size: 12px;">ID: <?php echo htmlspecialchars($post['author']); ?></span>
                             <span style="color: #999; font-size: 12px;">· <?php echo date('M j, H:i', $post['time']); ?></span>
                         </div>
-                        <div class="post-content"><?php echo nl2br(htmlspecialchars($post['content'])); ?></div>
+                        <div class="post-content markdown-renderer" data-markdown="<?php echo htmlspecialchars($post['content'], ENT_QUOTES, 'UTF-8'); ?>"></div>
                     </div>
                 <?php endforeach; ?>
             </div>
@@ -1079,9 +1164,73 @@ $page = $_GET['page'] ?? 'forum';
                 <h3>Reply</h3>
                 <form method="POST">
                     <input type="hidden" name="action" value="reply_thread">
-                    <input type="hidden" name="thread_id" value="<?php echo $t_id; ?>">
-                    <textarea name="content" placeholder="Write a reply..." required></textarea>
+                    <input type="hidden" name="thread_id" value="<?php echo htmlspecialchars($t_id); ?>">
+                    <textarea name="content" placeholder="Write a reply (Markdown supported)..." required></textarea>
                     <button type="submit">Post Reply</button>
+                </form>
+            </div>
+            
+        <?php elseif ($page === 'blogs'): ?>
+            <h2 style="margin-bottom: 16px;">Global Blog Feed</h2>
+            <div class="box">
+            <?php 
+            $blogs = load_db('blogs.json');
+            uasort($blogs, function($a, $b) {
+                return $b['posts'][0]['time'] <=> $a['posts'][0]['time'];
+            });
+            if (empty($blogs)): ?>
+                <p style="text-align: center; color: #999; font-size: 14px; padding: 20px;">No blog posts yet.</p>
+            <?php else:
+                foreach ($blogs as $blog): ?>
+                    <div class="forum-thread">
+                        <div class="forum-thread-header">
+                            <a href="?page=blogpost&id=<?php echo htmlspecialchars($blog['id']); ?>" class="forum-thread-title"><?php echo htmlspecialchars($blog['title']); ?></a>
+                            <span class="forum-thread-meta">by <a href="?page=user&id=<?php echo htmlspecialchars($blog['author']); ?>" style="text-decoration:none; color:inherit;"><?php echo get_handle($blog['author']); ?></a> • <?php echo date('M j, Y', $blog['posts'][0]['time']); ?></span>
+                        </div>
+                    </div>
+                <?php endforeach;
+            endif; ?>
+            </div>
+
+        <?php elseif ($page === 'blogpost'): ?>
+            <?php 
+            $b_id = $_GET['id'];
+            $blogs = load_db('blogs.json');
+            $blog = $blogs[$b_id] ?? null;
+            if (!$blog) die("Blog post not found.");
+            $original_post = $blog['posts'][0];
+            $comments = array_slice($blog['posts'], 1);
+            ?>
+            <h2><?php echo htmlspecialchars($blog['title']); ?></h2>
+            <p style="color: #666; font-size: 13px; margin-bottom: 16px;">Posted by <a href="?page=user&id=<?php echo htmlspecialchars($blog['author']); ?>" class="handle"><?php echo get_handle($blog['author']); ?></a> on <?php echo date('F j, Y, H:i', $original_post['time']); ?></p>
+
+            <div class="box" style="margin-bottom: 16px; background: white; border-top: 3px solid #0066cc;">
+                <div class="post-content markdown-renderer" style="font-size: 15px;" data-markdown="<?php echo htmlspecialchars($original_post['content'], ENT_QUOTES, 'UTF-8'); ?>"></div>
+            </div>
+
+            <div class="box" style="margin-bottom: 16px;">
+                <h3>Comments (<?php echo count($comments); ?>)</h3>
+                <?php if (empty($comments)): ?>
+                    <p style="font-size: 13px; color: #999;">No comments yet.</p>
+                <?php endif; ?>
+                <?php foreach ($comments as $post): ?>
+                    <div class="post">
+                        <div class="post-header">
+                            <a href="?page=user&id=<?php echo htmlspecialchars($post['author']); ?>" class="handle"><?php echo get_handle($post['author']); ?></a>
+                            <span style="color: #999; font-size: 12px;">· <?php echo date('M j, H:i', $post['time']); ?></span>
+                        </div>
+                        <div class="post-content markdown-renderer" data-markdown="<?php echo htmlspecialchars($post['content'], ENT_QUOTES, 'UTF-8'); ?>"></div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+
+            <div class="box">
+                <h3>Leave a Comment</h3>
+                <form method="POST">
+                    <input type="hidden" name="action" value="reply_blog">
+                    <input type="hidden" name="blog_id" value="<?php echo htmlspecialchars($b_id); ?>">
+                    <textarea name="content" placeholder="Write your comment (Markdown supported)..." required></textarea>
+                    <button type="submit">Post Comment</button>
                 </form>
             </div>
 
@@ -1093,6 +1242,23 @@ $page = $_GET['page'] ?? 'forum';
             ?>
             <h2><?php echo $view_user_handle; ?>'s Profile</h2>
             <p style="color: #666; font-size: 13px; margin-bottom: 12px;">User ID: <?php echo $view_user_id; ?></p>
+            
+            <div class="box">
+                <h3>Blogs by <?php echo $view_user_handle; ?></h3>
+                <?php 
+                $blogs = load_db('blogs.json');
+                $user_blogs = array_filter($blogs, function($b) use ($view_user_id) { return $b['author'] === $view_user_id; });
+                if (empty($user_blogs)): ?>
+                    <p style="font-size: 13px; color: #999;">This user has no blog posts.</p>
+                <?php else:
+                    foreach (array_reverse($user_blogs) as $blog): ?>
+                        <div class="data-item">
+                            <a href="?page=blogpost&id=<?php echo htmlspecialchars($blog['id']); ?>" class="data-item-link"><?php echo htmlspecialchars($blog['title']); ?></a>
+                            <div class="data-item-desc"><?php echo count($blog['posts'])-1; ?> comments • <?php echo date('M j, Y', $blog['posts'][0]['time']); ?></div>
+                        </div>
+                    <?php endforeach;
+                endif; ?>
+            </div>
 
             <div class="box">
                 <h3>Lists (<?php echo count($view_user_lists); ?>)</h3>
@@ -1171,7 +1337,6 @@ $page = $_GET['page'] ?? 'forum';
                 $total_items = count($all_items);
                 $page_num = isset($_GET['items_page']) ? (int)$_GET['items_page'] : 1;
                 
-                // Sort by reverse order (most recent first)
                 $sorted_items = array_reverse($all_items, true);
                 $items_slice = array_slice($sorted_items, ($page_num - 1) * $items_per_page, $items_per_page, true);
                 $total_pages = ceil($total_items / $items_per_page);
@@ -1217,7 +1382,6 @@ $page = $_GET['page'] ?? 'forum';
                 $total_props = count($all_props);
                 $props_page_num = isset($_GET['props_page']) ? (int)$_GET['props_page'] : 1;
                 
-                // Sort by reverse order (most recent first)
                 $sorted_props = array_reverse($all_props, true);
                 $props_slice = array_slice($sorted_props, ($props_page_num - 1) * $props_per_page, $props_per_page, true);
                 $total_props_pages = ceil($total_props / $props_per_page);
@@ -1337,14 +1501,13 @@ $page = $_GET['page'] ?? 'forum';
                 $appears_on_lists = [];
                 $all_lists = load_db('lists.json');
                 
-                // Search through all users' lists
-                foreach ($all_lists as $user_id => $user_lists) {
+                foreach ($all_lists as $list_user_id => $user_lists) {
                     foreach ($user_lists as $list_idx => $list) {
                         foreach ($list['items'] as $list_item_idx => $list_item) {
                             if ($list_item['item_id'] === $i_id) {
                                 $appears_on_lists[] = [
-                                    'user_id' => $user_id,
-                                    'user_handle' => get_handle($user_id),
+                                    'user_id' => $list_user_id,
+                                    'user_handle' => get_handle($list_user_id),
                                     'list_idx' => $list_idx,
                                     'list_title' => $list['title']
                                 ];
@@ -1371,6 +1534,13 @@ $page = $_GET['page'] ?? 'forum';
     </div>
 
     <script>
+    document.querySelectorAll('.markdown-renderer').forEach(function(el) {
+        var rawMarkdown = el.getAttribute('data-markdown');
+        if (rawMarkdown) {
+            el.innerHTML = marked.parse(rawMarkdown);
+        }
+    });
+
     function setupAutocomplete(inputObj, hiddenIdObj, resultsBoxObj) {
         if(!inputObj) return;
         let timeout = null;
@@ -1425,7 +1595,6 @@ $page = $_GET['page'] ?? 'forum';
         document.getElementById('list_autocomplete')
     );
 
-    // Property dropdown with search
     const propDropdownBtn = document.getElementById('prop_dropdown_btn');
     const propDropdown = document.getElementById('prop_dropdown');
     const propSearchInput = document.getElementById('prop_search');
@@ -1433,9 +1602,8 @@ $page = $_GET['page'] ?? 'forum';
     const propIdField = document.getElementById('prop_id');
     
     if (propDropdownBtn) {
-        const propsData = <?php echo json_encode(load_db('data_props.json')); ?>;
+        const propsData = <?php echo json_encode(load_db('data_props.json') ?: new stdClass()); ?>;
         
-        // Toggle dropdown
         propDropdownBtn.addEventListener('click', function(e) {
             e.preventDefault();
             propDropdown.style.display = propDropdown.style.display === 'none' ? 'block' : 'none';
@@ -1445,7 +1613,6 @@ $page = $_GET['page'] ?? 'forum';
             }
         });
         
-        // Filter properties as user types
         propSearchInput.addEventListener('input', function() {
             const q = this.value.toLowerCase();
             const filtered = Object.entries(propsData).filter(([id, prop]) => 
@@ -1454,7 +1621,6 @@ $page = $_GET['page'] ?? 'forum';
             renderPropList(filtered);
         });
         
-        // Render property list
         function renderPropList(items) {
             propList.innerHTML = '';
             items.forEach(([id, prop]) => {
@@ -1476,7 +1642,6 @@ $page = $_GET['page'] ?? 'forum';
             });
         }
         
-        // Close dropdown when clicking outside
         document.addEventListener('click', function(e) {
             if (!propDropdownBtn.contains(e.target) && !propDropdown.contains(e.target)) {
                 propDropdown.style.display = 'none';

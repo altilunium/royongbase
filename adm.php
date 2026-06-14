@@ -187,6 +187,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['admin_action'])) {
         header("Location: adm.php?page=thread&id=$t_id");
         exit;
     }
+
+    // Delete Blog
+    if ($_POST['admin_action'] === 'delete_blog') {
+        $db_blogs = 'blogs.json';
+        $blogs = load_db($db_blogs);
+        $b_id = $_POST['blog_id'];
+        if (isset($blogs[$b_id])) {
+            unset($blogs[$b_id]);
+            save_db($db_blogs, $blogs);
+        }
+        header("Location: adm.php?page=blogs");
+        exit;
+    }
+    
+    // Delete Blog Post (Comment)
+    if ($_POST['admin_action'] === 'delete_blog_post') {
+        $db_blogs = 'blogs.json';
+        $blogs = load_db($db_blogs);
+        $b_id = $_POST['blog_id'];
+        $p_idx = (int)$_POST['post_index'];
+        if (isset($blogs[$b_id]['posts'][$p_idx])) {
+            array_splice($blogs[$b_id]['posts'], $p_idx, 1);
+            if (empty($blogs[$b_id]['posts'])) {
+                unset($blogs[$b_id]);
+            }
+            save_db($db_blogs, $blogs);
+        }
+        header("Location: adm.php?page=blogpost&id=$b_id");
+        exit;
+    }
     
     // Delete Item
     if ($_POST['admin_action'] === 'delete_item') {
@@ -566,6 +596,7 @@ function get_value_link($value_id, $value_label) {
             </div>
             <nav>
                 <a href="adm.php?page=forum">Forum</a>
+                <a href="adm.php?page=blogs">Blogs</a>
                 <a href="adm.php?page=data">Wiki</a>
                 <a href="adm.php?page=deleted_statements">Deleted Statements</a>
                 <a href="index.php" style="background: rgba(0,0,0,0.2);">← Back to App</a>
@@ -584,7 +615,7 @@ function get_value_link($value_id, $value_label) {
                 foreach (array_reverse($forum, true) as $t_id => $thread): ?>
                     <div class="forum-thread">
                         <div class="forum-thread-header">
-                            <a href="adm.php?page=thread&id=<?php echo $t_id; ?>" class="forum-thread-title"><?php echo $thread['title']; ?></a>
+                            <a href="adm.php?page=thread&id=<?php echo $t_id; ?>" class="forum-thread-title"><?php echo htmlspecialchars($thread['title']); ?></a>
                             <span class="forum-thread-meta"><?php echo count($thread['posts']); ?> posts</span>
                             <form method="POST" style="display:inline; margin: 0;">
                                 <input type="hidden" name="admin_action" value="delete_thread">
@@ -603,7 +634,7 @@ function get_value_link($value_id, $value_label) {
             $thread = $forum[$t_id] ?? null;
             if (!$thread) die("Thread not found.");
             ?>
-            <h2><?php echo $thread['title']; ?></h2>
+            <h2><?php echo htmlspecialchars($thread['title']); ?></h2>
             <div style="margin-bottom: 12px;">
                 <form method="POST" style="display:inline;">
                     <input type="hidden" name="admin_action" value="delete_thread">
@@ -618,13 +649,71 @@ function get_value_link($value_id, $value_label) {
                     <div class="post">
                         <div class="post-header">
                             <span class="handle"><?php echo get_handle($post['author']); ?></span>
-                            <span style="color: #999; font-size: 12px;">ID: <?php echo $post['author']; ?></span>
+                            <span style="color: #999; font-size: 12px;">ID: <?php echo htmlspecialchars($post['author']); ?></span>
                             <span style="color: #999; font-size: 12px;">· <?php echo date('M j, H:i', $post['time']); ?></span>
                         </div>
-                        <div class="post-content"><?php echo nl2br($post['content']); ?></div>
+                        <div class="post-content"><?php echo nl2br(htmlspecialchars($post['content'])); ?></div>
                         <form method="POST" style="display:inline;">
                             <input type="hidden" name="admin_action" value="delete_post">
                             <input type="hidden" name="thread_id" value="<?php echo $t_id; ?>">
+                            <input type="hidden" name="post_index" value="<?php echo $p_idx; ?>">
+                            <button class="delete-btn" onclick="return confirm('Delete this post?');">Delete Post</button>
+                        </form>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+
+        <?php elseif ($page === 'blogs'): ?>
+            <h2>🗑️ Blogs Management</h2>
+            <?php 
+            $blogs = load_db('blogs.json');
+            if (empty($blogs)): ?>
+                <p style="text-align: center; color: #999; font-size: 14px; padding: 20px;">No blogs.</p>
+            <?php else:
+                foreach (array_reverse($blogs, true) as $b_id => $blog): ?>
+                    <div class="forum-thread">
+                        <div class="forum-thread-header">
+                            <a href="adm.php?page=blogpost&id=<?php echo $b_id; ?>" class="forum-thread-title"><?php echo htmlspecialchars($blog['title']); ?></a>
+                            <span class="forum-thread-meta"><?php echo count($blog['posts']); ?> posts</span>
+                            <form method="POST" style="display:inline; margin: 0;">
+                                <input type="hidden" name="admin_action" value="delete_blog">
+                                <input type="hidden" name="blog_id" value="<?php echo $b_id; ?>">
+                                <button class="delete-btn" onclick="return confirm('Delete entire blog?');">Delete Blog</button>
+                            </form>
+                        </div>
+                    </div>
+                <?php endforeach;
+            endif; ?>
+
+        <?php elseif ($page === 'blogpost'): ?>
+            <?php 
+            $b_id = $_GET['id'];
+            $blogs = load_db('blogs.json');
+            $blog = $blogs[$b_id] ?? null;
+            if (!$blog) die("Blog not found.");
+            ?>
+            <h2><?php echo htmlspecialchars($blog['title']); ?></h2>
+            <div style="margin-bottom: 12px;">
+                <form method="POST" style="display:inline;">
+                    <input type="hidden" name="admin_action" value="delete_blog">
+                    <input type="hidden" name="blog_id" value="<?php echo $b_id; ?>">
+                    <button class="delete-btn" onclick="return confirm('Delete entire blog?');">🗑️ Delete Entire Blog</button>
+                </form>
+            </div>
+
+            <div class="box">
+                <h3><?php echo count($blog['posts']); ?> Posts</h3>
+                <?php foreach ($blog['posts'] as $p_idx => $post): ?>
+                    <div class="post">
+                        <div class="post-header">
+                            <span class="handle"><?php echo get_handle($post['author']); ?></span>
+                            <span style="color: #999; font-size: 12px;">ID: <?php echo htmlspecialchars($post['author']); ?></span>
+                            <span style="color: #999; font-size: 12px;">· <?php echo date('M j, H:i', $post['time']); ?></span>
+                        </div>
+                        <div class="post-content"><?php echo nl2br(htmlspecialchars($post['content'])); ?></div>
+                        <form method="POST" style="display:inline;">
+                            <input type="hidden" name="admin_action" value="delete_blog_post">
+                            <input type="hidden" name="blog_id" value="<?php echo $b_id; ?>">
                             <input type="hidden" name="post_index" value="<?php echo $p_idx; ?>">
                             <button class="delete-btn" onclick="return confirm('Delete this post?');">Delete Post</button>
                         </form>
@@ -646,8 +735,8 @@ function get_value_link($value_id, $value_label) {
                         foreach ($items as $id => $item): ?>
                             <div class="data-item">
                                 <div class="data-item-left">
-                                    <a href="adm.php?page=item&id=<?php echo $id; ?>" class="data-item-link"><?php echo $item['label']; ?></a>
-                                    <div class="data-item-desc"><?php echo $item['desc']; ?></div>
+                                    <a href="adm.php?page=item&id=<?php echo $id; ?>" class="data-item-link"><?php echo htmlspecialchars($item['label']); ?></a>
+                                    <div class="data-item-desc"><?php echo htmlspecialchars($item['desc']); ?></div>
                                 </div>
                                 <form method="POST" style="display:inline; margin: 0;">
                                     <input type="hidden" name="admin_action" value="delete_item">
@@ -669,7 +758,7 @@ function get_value_link($value_id, $value_label) {
                         foreach ($props as $p_id => $prop): ?>
                             <div class="data-item">
                                 <div class="data-item-left">
-                                    <div class="data-item-link"><?php echo $prop['label']; ?></div>
+                                    <div class="data-item-link"><?php echo htmlspecialchars($prop['label']); ?></div>
                                 </div>
                                 <form method="POST" style="display:inline; margin: 0;">
                                     <input type="hidden" name="admin_action" value="delete_property">
@@ -682,108 +771,106 @@ function get_value_link($value_id, $value_label) {
                 </div>
             </div>
 
+        <?php elseif ($page === 'deleted_statements'): ?>
+            <h2>🗑️ Deleted Statements Dashboard</h2>
 
-            <?php elseif ($page === 'deleted_statements'): ?>
+            <?php
+            $deletions = load_jsonl('deletion_log.jsonl');
+            ?>
 
-    <h2>🗑️ Deleted Statements Dashboard</h2>
+            <div class="box">
+                <h3>
+                    Deleted Statements
+                    (<?php echo count($deletions); ?>)
+                </h3>
 
-    <?php
-    $deletions = load_jsonl('deletion_log.jsonl');
-    ?>
+                <?php if (empty($deletions)): ?>
+                    <p style="color:#999;font-size:13px;">
+                        No deletion logs yet.
+                    </p>
 
-    <div class="box">
-        <h3>
-            Deleted Statements
-            (<?php echo count($deletions); ?>)
-        </h3>
+                <?php else: ?>
 
-        <?php if (empty($deletions)): ?>
-            <p style="color:#999;font-size:13px;">
-                No deletion logs yet.
-            </p>
+                    <?php foreach ($deletions as $log): ?>
 
-        <?php else: ?>
+                        <div class="data-item"
+                             style="align-items:flex-start;
+                                    flex-direction:column;
+                                    gap:4px;
+                                    padding:12px;">
 
-            <?php foreach ($deletions as $log): ?>
+                            <div style="font-size:13px;">
+                                <strong>
+                                    <?php echo htmlspecialchars($log['user_handle']); ?>
+                                </strong>
 
-                <div class="data-item"
-                     style="align-items:flex-start;
-                            flex-direction:column;
-                            gap:4px;
-                            padding:12px;">
+                                (ID:
+                                <?php echo htmlspecialchars($log['user_id']); ?>)
 
-                    <div style="font-size:13px;">
-                        <strong>
-                            <?php echo htmlspecialchars($log['user_handle']); ?>
-                        </strong>
+                                deleted a statement
+                            </div>
 
-                        (ID:
-                        <?php echo htmlspecialchars($log['user_id']); ?>)
+                            <div style="font-size:12px;color:#888;">
+                                <?php
+                                echo date(
+                                    'Y-m-d H:i:s',
+                                    $log['unix_time']
+                                );
+                                ?>
+                            </div>
 
-                        deleted a statement
-                    </div>
+                            <div style="
+                                background:#f8f8f8;
+                                border-left:3px solid #dc3545;
+                                padding:8px;
+                                width:100%;
+                                font-size:14px;
+                            ">
 
-                    <div style="font-size:12px;color:#888;">
-                        <?php
-                        echo date(
-                            'Y-m-d H:i:s',
-                            $log['unix_time']
-                        );
-                        ?>
-                    </div>
+                                <div>
+                                    <strong>Item:</strong>
 
-                    <div style="
-                        background:#f8f8f8;
-                        border-left:3px solid #dc3545;
-                        padding:8px;
-                        width:100%;
-                        font-size:14px;
-                    ">
+                                    <a href="adm.php?page=item&id=<?php echo urlencode($log['triple']['item_id']); ?>">
+                                        <?php echo htmlspecialchars($log['triple']['item_label']); ?>
+                                    </a>
 
-                        <div>
-                            <strong>Item:</strong>
+                                    (<?php echo htmlspecialchars($log['triple']['item_id']); ?>)
+                                </div>
 
-                            <a href="adm.php?page=item&id=<?php echo urlencode($log['triple']['item_id']); ?>">
-                                <?php echo htmlspecialchars($log['triple']['item_label']); ?>
-                            </a>
+                                <div>
+                                    <strong>Property:</strong>
 
-                            (<?php echo htmlspecialchars($log['triple']['item_id']); ?>)
+                                    <?php
+                                    echo htmlspecialchars(
+                                        $log['triple']['property_label']
+                                    );
+                                    ?>
+
+                                    (<?php
+                                    echo htmlspecialchars(
+                                        $log['triple']['property_id']
+                                    );
+                                    ?>)
+                                </div>
+
+                                <div>
+                                    <strong>Value:</strong>
+
+                                    <?php
+                                    echo get_value_link(
+                                        $log['triple']['value_id'],
+                                        $log['triple']['value_label']
+                                    );
+                                    ?>
+                                </div>
+
+                            </div>
                         </div>
 
-                        <div>
-                            <strong>Property:</strong>
+                    <?php endforeach; ?>
 
-                            <?php
-                            echo htmlspecialchars(
-                                $log['triple']['property_label']
-                            );
-                            ?>
-
-                            (<?php
-                            echo htmlspecialchars(
-                                $log['triple']['property_id']
-                            );
-                            ?>)
-                        </div>
-
-                        <div>
-                            <strong>Value:</strong>
-
-                            <?php
-                            echo get_value_link(
-                                $log['triple']['value_id'],
-                                $log['triple']['value_label']
-                            );
-                            ?>
-                        </div>
-
-                    </div>
-                </div>
-
-            <?php endforeach; ?>
-
-        <?php endif; ?>
-    </div>
+                <?php endif; ?>
+            </div>
 
         <?php elseif ($page === 'item'): ?>
             <?php 
@@ -794,8 +881,8 @@ function get_value_link($value_id, $value_label) {
             $item = $items[$i_id] ?? null;
             if (!$item) die("Item not found.");
             ?>
-            <h2><?php echo $item['label']; ?></h2>
-            <p style="color: #666; margin-bottom: 12px;"><?php echo $item['desc']; ?></p>
+            <h2><?php echo htmlspecialchars($item['label']); ?></h2>
+            <p style="color: #666; margin-bottom: 12px;"><?php echo htmlspecialchars($item['desc']); ?></p>
             
             <div style="margin-bottom: 12px;">
                 <form method="POST" style="display:inline;">
@@ -813,30 +900,14 @@ function get_value_link($value_id, $value_label) {
                     foreach ($statements as $stmt_idx => $st): ?>
                         <div class="statement-item">
                             <div class="statement-content">
-                                <div class="statement-property"><?php echo $props[$st['property']]['label'] ?? $st['property']; ?></div>
+                                <div class="statement-property"><?php echo htmlspecialchars($props[$st['property']]['label'] ?? $st['property']); ?></div>
                                 <div class="statement-value"><?php echo get_value_link($st['value_id'], $st['value_label']); ?></div>
                             </div>
                         </div>
                     <?php endforeach;
                 endif; ?>
             </div>
-
-
-
-
-
-
-
-
-
         <?php endif; ?>
-
-
-
-
-  
-
-
         </main>
     </div>
 </body>
