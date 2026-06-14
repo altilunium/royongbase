@@ -391,6 +391,15 @@ $page = $_GET['page'] ?? 'forum';
     <link rel="icon" href="https://pbs.twimg.com/profile_images/1716831335724326912/8ujZJHcJ_400x400.jpg" type="image/x-icon" />
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
+@font-face {
+    font-family: 'Noto';
+    font-style: normal;
+    font-weight: normal;
+    src: url('noto.woff2') format('woff');
+}
+
+
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -665,10 +674,83 @@ max-width: 100%;
         }
         
         .post-content {
+            /*
             font-size: 14px;
             color: #333;
             word-break: break-word;
+            */
+                width: 95%;
+    border: 0px;
+    overflow: hidden;
+    resize: none;
+    font-family: 'Noto';
+    color: #1A1A1B;
+    font-size: 14px !important;
+    line-height: 21px;
+    font-weight: 400;
+    /*padding-bottom: 15px;*/
+    margin-top: 47px;
+
+    
+    margin: 0px auto 0px auto;
+    max-width: 750px;
+    
         }
+
+.post-content blockquote {
+    border-left: 1px solid #cacaca;
+    padding-left: 9px;
+    margin-left: 19px;
+    margin-right: 7px;
+}
+
+        .post-content blockquote p {
+    padding-top: 4px;
+    padding-bottom: 4px;
+}
+
+        .post-content h1 {
+
+    text-align: center;
+    margin-bottom: 44px;
+    line-height: 38px;
+
+        }
+
+.post-content h3 {
+    display: block;
+    font-size: 1.17em;
+    margin-block-start: 1em;
+    margin-block-end: 1em;
+    margin-inline-start: 0px;
+    margin-inline-end: 0px;
+    font-weight: bold;
+    unicode-bidi: isolate;
+}
+
+.post-content p {
+
+    margin: 19px 0px;
+    display: block;
+    margin-block-start: 1em;
+    margin-block-end: 1em;
+    margin-inline-start: 0px;
+    margin-inline-end: 0px;
+    unicode-bidi: isolate;
+
+}
+
+
+        .post-content ol {
+                display: block;
+    list-style-type: decimal;
+    margin-block-start: 1em;
+    margin-block-end: 1em;
+    padding-inline-start: 40px;
+    unicode-bidi: isolate;
+        }
+
+
         
         .post-content p {
             margin: 0 0 10px 0;
