@@ -381,13 +381,49 @@ function get_value_link($value_id, $value_label) {
 }
 
 $page = $_GET['page'] ?? 'forum';
+
+
+// Define default metadata settings for fallback
+$page_title = "BisikBekasi.rf.gd";
+$page_desc = "BisikBekasi forum, blogs and knowledge base.";
+$page_url = "http://" . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+
+// Check if the current request is for a specific blog post entry
+if (isset($_GET['page']) && $_GET['page'] === 'blogpost' && isset($_GET['id'])) {
+    $blog_id = $_GET['id'];
+    $all_blogs = load_db('blogs.json');
+    if (isset($all_blogs[$blog_id])) {
+        $target_blog = $all_blogs[$blog_id];
+        $page_title = htmlspecialchars($target_blog['title']) . " - BisikBekasi";
+        if (!empty($target_blog['posts'])) {
+            $first_post_content = $target_blog['posts'][0]['content'];
+            $page_desc = htmlspecialchars(mb_strimwidth(strip_tags($first_post_content), 0, 150, "..."));
+        }
+    }
+}
+
+
 ?>
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BisikBekasi.rf.gd</title>
+    <title><?php echo $page_title; ?></title>
+
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="<?php echo $page_title; ?>">
+    <meta property="og:description" content="<?php echo $page_desc; ?>">
+    <meta property="og:url" content="<?php echo htmlspecialchars($page_url); ?>">
+    <meta property="og:image" content="https://pbs.twimg.com/profile_images/1716831335724326912/8ujZJHcJ_400x400.jpg">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="<?php echo $page_title; ?>">
+    <meta name="twitter:description" content="<?php echo $page_desc; ?>">
+    <meta name="twitter:image" content="https://pbs.twimg.com/profile_images/1716831335724326912/8ujZJHcJ_400x400.jpg">
+
+
+    
     <link rel="icon" href="https://pbs.twimg.com/profile_images/1716831335724326912/8ujZJHcJ_400x400.jpg" type="image/x-icon" />
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
@@ -750,8 +786,22 @@ max-width: 100%;
     unicode-bidi: isolate;
         }
 
+        .post-content ul {
+                display: block;
+    list-style-type: disc;
+    margin-block-start: 1em;
+    margin-block-end: 1em;
+    padding-inline-start: 40px;
+    unicode-bidi: isolate;
+        }
 
-        
+
+        .post-content hr{
+                width: 100%;
+    border: #eee 1px solid;
+    margin: 39px 0px;
+        }
+
         .post-content p {
             margin: 0 0 10px 0;
         }
