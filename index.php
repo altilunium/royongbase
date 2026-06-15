@@ -21,6 +21,36 @@ function log_deletion($data) {
     );
 }
 
+// New Helper: Update Last Login in JSONL format without keeping history
+function update_last_login($user_id) {
+    $filename = 'last_logins.jsonl';
+    $logins = [];
+    
+    if (file_exists($filename)) {
+        $lines = file($filename, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($lines as $line) {
+            $data = json_decode($line, true);
+            if (isset($data['user_id'])) {
+                $logins[$data['user_id']] = $data;
+            }
+        }
+    }
+    
+    $logins[$user_id] = [
+        'user_id' => $user_id,
+        'last_login' => date('c'), // ISO 8601 timestamp
+        'ip_address' => $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN',
+        'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'UNKNOWN'
+    ];
+    
+    $output = '';
+    foreach ($logins as $record) {
+        $output .= json_encode($record, JSON_UNESCAPED_UNICODE) . PHP_EOL;
+    }
+    
+    file_put_contents($filename, $output, LOCK_EX);
+}
+
 // 1. Authentication and User Mapping
 $db_users = 'users.json';
 $users_data = load_db($db_users);
@@ -38,6 +68,9 @@ if (!isset($_COOKIE[$cookie_name])) {
     $users_data['map'][$uuid] = $user_id;
     $users_data['reverse_map'][$user_id] = $encrypted_uuid;
     save_db($db_users, $users_data);
+
+    // Log the brand new user's first login
+    update_last_login($user_id);
     
     setcookie($cookie_name, $encrypted_uuid, time() + (10 * 365 * 24 * 60 * 60), '/'); // 10 years
     $redirect_url = 'index.php' . (empty($_SERVER['QUERY_STRING']) ? '' : '?' . $_SERVER['QUERY_STRING']);
@@ -48,6 +81,9 @@ if (!isset($_COOKIE[$cookie_name])) {
     $uuid = openssl_decrypt($encrypted_uuid, $cipher, $app_key, 0, $iv);
     if ($uuid && isset($users_data['map'][$uuid])) {
         $user_id = $users_data['map'][$uuid];
+
+        // Log the returning user's latest login
+        update_last_login($user_id);
     } else {
         setcookie($cookie_name, '', time() - 3600, '/');
         header("Location: index.php");

@@ -1,6 +1,6 @@
 <?php
 // ADMIN AUTHENTICATION with Cookies
-$admin_password = 'INSERTYOURMASTERPASSWORDHERE'; // Change this in production!
+$admin_password = 'YOURMASTERPASSWORD'; // Change this in production!
 $admin_cookie_name = 'adm_token';
 $admin_token_secret = 'your-admin-secret-key-change-this';
 
@@ -598,6 +598,7 @@ function get_value_link($value_id, $value_label) {
                 <a href="adm.php?page=forum">Forum</a>
                 <a href="adm.php?page=blogs">Blogs</a>
                 <a href="adm.php?page=data">Wiki</a>
+                <a href="adm.php?page=user_logins">User Logins</a>
                 <a href="adm.php?page=deleted_statements">Deleted Statements</a>
                 <a href="index.php" style="background: rgba(0,0,0,0.2);">← Back to App</a>
                 <a href="?logout=1" class="logout-btn">Logout</a>
@@ -872,6 +873,94 @@ function get_value_link($value_id, $value_label) {
                 <?php endif; ?>
             </div>
 
+
+<?php elseif ($page === 'user_logins'): ?>
+    <h2>🖥️ User Login Audit Logs</h2>
+
+    <?php
+    $log_file = 'last_logins.jsonl';
+    $logins = [];
+    $search_query = trim($_GET['search'] ?? '');
+
+    if (file_exists($log_file)) {
+        $lines = file($log_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($lines as $line) {
+            $decoded = json_decode($line, true);
+            if ($decoded) {
+                // Apply search filter if a query is provided
+                if ($search_query !== '') {
+                    $match_id = stripos((string)$decoded['user_id'], $search_query) !== false;
+                    $match_ip = stripos($decoded['ip_address'], $search_query) !== false;
+                    $match_ua = stripos($decoded['user_agent'], $search_query) !== false;
+                    
+                    if (!$match_id && !$match_ip && !$match_ua) {
+                        continue; // Skip this record if it doesn't match
+                    }
+                }
+                $logins[] = $decoded;
+            }
+        }
+    }
+
+    // Sort by newest login timestamp first
+    usort($logins, function($a, $b) {
+        return strcmp($b['last_login'] ?? '', $a['last_login'] ?? '');
+    });
+    ?>
+
+    <div class="box" style="margin-bottom: 16px;">
+        <form method="GET" action="adm.php" style="display: flex; gap: 8px; margin: 0;">
+            <input type="hidden" name="page" value="user_logins">
+            <input type="text" name="search" value="<?php echo htmlspecialchars($search_query); ?>" placeholder="Search by User ID, IP Address, or User Agent..." style="margin-bottom: 0; flex: 1;">
+            <button type="submit" style="white-space: nowrap;">Filter Results</button>
+            <?php if ($search_query !== ''): ?>
+                <a href="adm.php?page=user_logins" style="padding: 8px 12px; background: #6c757d; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; font-weight: 500;">Clear</a>
+            <?php endif; ?>
+        </form>
+    </div>
+
+    <div class="box">
+        <h3>Active System Logs (<?php echo count($logins); ?>)</h3>
+        
+        <?php if (empty($logins)): ?>
+            <p style="text-align: center; color: #999; font-size: 14px; padding: 20px;">No matching login records found.</p>
+        <?php else: ?>
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 14px; text-align: left;">
+                    <thead>
+                        <tr style="background: #f8f9fa; border-bottom: 2px solid #e0e0e0;">
+                            <th style="padding: 10px;">User Details</th>
+                            <th style="padding: 10px;">IP Address</th>
+                            <th style="padding: 10px;">Last Active Timestamp</th>
+                            <th style="padding: 10px;">Browser User Agent</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($logins as $record): ?>
+                            <tr style="border-bottom: 1px solid #f0f0f0;">
+                                <td style="padding: 10px; font-weight: 600; color: #d9534f;">
+                                    <?php echo get_handle($record['user_id']); ?>
+                                    <span style="display: block; font-size: 11px; color: #999; font-weight: normal;">Raw ID: <?php echo htmlspecialchars($record['user_id']); ?></span>
+                                </td>
+                                <td style="padding: 10px; font-family: monospace; color: #555;">
+                                    <?php echo htmlspecialchars($record['ip_address']); ?>
+                                </td>
+                                <td style="padding: 10px; color: #333; white-space: nowrap;">
+                                    <?php echo date('Y-m-d H:i:s', strtotime($record['last_login'])); ?>
+                                </td>
+                                <td style="padding: 10px; color: #666; font-size: 12px; max-width: 300px; word-break: break-all;">
+                                    <?php echo htmlspecialchars($record['user_agent']); ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </div>
+
+            
+
         <?php elseif ($page === 'item'): ?>
             <?php 
             $i_id = $_GET['id'];
@@ -907,7 +996,15 @@ function get_value_link($value_id, $value_label) {
                     <?php endforeach;
                 endif; ?>
             </div>
+
+
+
+
+
+
         <?php endif; ?>
+
+
         </main>
     </div>
 </body>
